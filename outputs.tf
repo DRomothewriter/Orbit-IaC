@@ -48,3 +48,19 @@ output "backend_iam_role_arn" {
   value       = aws_iam_role.backend_ec2_role.arn
 }
 
+output "media_bucket_name" {
+  description = "Nombre del bucket S3 para almacenamiento de avatares e imágenes"
+  value       = aws_s3_bucket.media_storage.id
+}
+
+output "media_bucket_arn" {
+  description = "ARN del bucket S3 de almacenamiento multimedia"
+  value       = aws_s3_bucket.media_storage.arn
+}
+
+output "media_bucket_domain_name" {
+  description = "Nombre de dominio regional de S3 para acceder a los archivos multimedia"
+  value       = aws_s3_bucket.media_storage.bucket_regional_domain_name
+}
+
+

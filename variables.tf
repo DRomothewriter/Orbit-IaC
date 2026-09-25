@@ -49,3 +49,15 @@ variable "admin_ssh_cidr" {
   default     = []
 }
 
+variable "cors_allowed_origins" {
+  description = "Lista de orígenes permitidos por CORS para el bucket de almacenamiento multimedia"
+  type        = list(string)
+  default = [
+    "http://localhost:4200",
+    "https://orbitapp.dev",
+    "https://*.orbitapp.dev",
+    "https://orbit.diego-romo-dev.com"
+  ]
+}
+
+
