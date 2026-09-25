@@ -1,0 +1,97 @@
+# ==============================================================================
+# ORBIT IAC - PRUEBAS DE INFRAESTRUCTURA (TERRAFORM TEST TDD)
+# ==============================================================================
+# Ejecuta aserciones automáticas en memoria mediante 'command = plan'
+# sin necesidad de aprovisionar infraestructura real en AWS.
+
+# Mock del proveedor AWS para pruebas unitarias sin dependencias externas
+mock_provider "aws" {}
+
+mock_provider "aws" {
+  alias = "us-east-1"
+}
+
+# Mock de variables para el entorno de test
+variables {
+  environment  = "dev"
+  project_name = "orbit"
+  aws_region   = "us-east-2"
+}
+
+override_data {
+  target = data.aws_subnets.default_public
+  values = {
+    ids = ["subnet-0123456789abcdef0"]
+  }
+}
+
+override_data {
+  target = data.aws_ami.ubuntu_24_04
+  values = {
+    id = "ami-0123456789abcdef0"
+  }
+}
+
+
+
+run "verify_security_group_rules" {
+  command = plan
+
+  assert {
+    condition     = aws_security_group.backend_sg.name == "orbit-backend-sg-dev"
+    error_message = "El nombre del Security Group no coincide con la convención de nomenclatura"
+  }
+
+  assert {
+    condition     = length([for r in aws_security_group.backend_sg.ingress : r if r.from_port == 80 && r.to_port == 80]) == 1
+    error_message = "El puerto HTTP 80 debe estar explícitamente configurado como regla de entrada"
+  }
+
+  assert {
+    condition     = length([for r in aws_security_group.backend_sg.ingress : r if r.from_port == 443 && r.to_port == 443]) == 1
+    error_message = "El puerto HTTPS 443 debe estar explícitamente configurado como regla de entrada"
+  }
+
+  assert {
+    condition     = length([for r in aws_security_group.backend_sg.ingress : r if r.from_port == 10000 && r.to_port == 10100 && r.protocol == "udp"]) == 1
+    error_message = "El rango UDP 10000-10100 para Mediasoup debe estar configurado como regla de entrada"
+  }
+}
+
+run "verify_ec2_and_storage_defaults" {
+  command = plan
+
+  assert {
+    condition     = aws_instance.backend.instance_type == "t3.small"
+    error_message = "El tipo de instancia EC2 por defecto debe ser t3.small"
+  }
+
+  assert {
+    condition     = aws_instance.backend.root_block_device[0].volume_size == 30
+    error_message = "El tamaño por defecto del volumen raíz debe ser 30 GiB"
+  }
+
+  assert {
+    condition     = aws_instance.backend.root_block_device[0].encrypted == true
+    error_message = "El volumen raíz de la EC2 debe tener cifrado habilitado"
+  }
+}
+
+run "verify_backend_resources" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.terraform_state.bucket == "orbit-terraform-state-us-east-2"
+    error_message = "El nombre del bucket de estado de Terraform no coincide con el formato esperado"
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.terraform_locks.name == "orbit-terraform-locks"
+    error_message = "El nombre de la tabla DynamoDB para locking no coincide con el formato esperado"
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.terraform_locks.hash_key == "LockID"
+    error_message = "La partition key de la tabla DynamoDB debe ser obligatoriamente 'LockID'"
+  }
+}

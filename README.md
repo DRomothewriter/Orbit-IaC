@@ -39,14 +39,30 @@ Orbit-IaC/
 ├── providers.tf                # Configuración de proveedores AWS (us-east-2 y alias us-east-1)
 ├── variables.tf                # Declaración de variables configurables
 ├── backend_resources.tf        # Declaración de recursos para el backend remoto (S3 + DynamoDB)
-├── outputs.tf                  # Salidas y metadatos exportados
+├── network.tf                  # Resolución de Default VPC y subred pública
+├── security_groups.tf          # Firewall para HTTP (80), HTTPS (443) y Mediasoup UDP (10000-10100)
+├── iam.tf                      # Rol IAM, Instance Profile y políticas para AWS SSM
+├── user_data.sh                # Script de bootstrap con Docker, Docker Compose y SSM Agent
+├── ec2.tf                      # Instancia EC2 Ubuntu 24.04, volumen cifrado gp3 y Elastic IP
+├── outputs.tf                  # Salidas y metadatos exportados (incluye IP pública del backend)
 ├── terraform.tfvars.example    # Plantilla de variables para entornos
 └── README.md                   # Documentación de arquitectura y operaciones
 ```
 
 ---
 
-## 4. Guía de Bootstrap (Primer Despliegue del Backend)
+## 4. Arquitectura de Cómputo y Optimización de Costos
+
+### ¿Por qué NO usamos un Load Balancer (ALB) ni Kubernetes (EKS)?
+1. **Incompatibilidad Técnica de ALB con Mediasoup:** El Application Load Balancer de AWS opera únicamente en capa 7 (HTTP/HTTPS) y **no soporta tráfico UDP**. Mediasoup (WebRTC SFU) requiere tráfico UDP bidireccional en el rango `10000-10100` para los flujos multimedia RTP/RTCP. Usar un Network Load Balancer (NLB) o ALB encarecería la factura en más de **$20 - $45 USD mensuales**.
+2. **Cero Sobrecosto de Orquestación:** Evitamos Kubernetes administrado (AWS EKS cobra $73 USD/mes solo por el plano de control). En su lugar, el backend corre en contenedores con **Docker Compose** orquestado sobre una única instancia EC2 (`t3.small` / `t3.medium`).
+3. **Terminación SSL y Proxy Inverso:** Un contenedor ligero de **Nginx** recibe el tráfico en los puertos `80` y `443` con certificados SSL/TLS automáticos de Let's Encrypt, redirigiendo a Node.js interna y limpiamente.
+4. **Elastic IP Dedicada:** La dirección IP pública estática se asigna a la EC2 sin intermediarios, permitiendo que la variable `MEDIASOUP_ANNOUNCED_IP` resuelva con latencia mínima.
+
+
+---
+
+## 5. Guía de Bootstrap (Primer Despliegue del Backend)
 
 Cuando el bucket S3 y la tabla DynamoDB aún no existen en AWS, Terraform no puede conectarse al backend remoto inmediatamente. El proceso de bootstrapping se realiza en tres pasos:
 
@@ -75,7 +91,7 @@ Cuando Terraform pregunte si deseas copiar el estado existente al nuevo backend 
 
 ---
 
-## 5. Comandos de Operación Diaria
+## 6. Comandos de Operación Diaria
 
 - **Formatear código:**
   ```bash
@@ -93,3 +109,15 @@ Cuando Terraform pregunte si deseas copiar el estado existente al nuevo backend 
   ```bash
   terraform apply
   ```
+- **Ejecutar suite de pruebas unitarias (TDD):**
+  ```bash
+  terraform test
+  ```
+
+---
+
+## 7. Estrategia de Escalado y Hoja de Ruta
+
+Para consultar la evolución arquitectónica proyectada hacia multi-región, desacoplamiento del SFU con Mediasoup PipeTransports, Redis ElastiCache y balanceadores NLB/ALB para más de 10,000 usuarios concurrentes, revisa el documento dedicado:
+👉 [**Estrategia de Escalado de Infraestructura (`SCALING_STRATEGY.md`)**](SCALING_STRATEGY.md).
+

@@ -27,3 +27,24 @@ output "acm_certificate_region" {
   description = "Región requerida para certificados SSL de CloudFront (us-east-1)"
   value       = "us-east-1"
 }
+
+output "backend_public_ip" {
+  description = "Dirección Elastic IP pública persistente asignada al backend (usada en MEDIASOUP_ANNOUNCED_IP)"
+  value       = aws_eip.backend_eip.public_ip
+}
+
+output "backend_instance_id" {
+  description = "Identificador de la instancia EC2 que hospeda el backend de Orbit"
+  value       = aws_instance.backend.id
+}
+
+output "backend_security_group_id" {
+  description = "ID del Security Group asociado al backend y a Mediasoup"
+  value       = aws_security_group.backend_sg.id
+}
+
+output "backend_iam_role_arn" {
+  description = "ARN del rol IAM asignado a la instancia EC2"
+  value       = aws_iam_role.backend_ec2_role.arn
+}
+
