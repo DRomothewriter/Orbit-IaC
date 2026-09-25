@@ -105,3 +105,9 @@ resource "aws_iam_role_policy_attachment" "s3_media_attachment" {
   policy_arn = aws_iam_policy.s3_media_access.arn
 }
 
+# Política gestionada de AWS para permitir a la instancia EC2 autenticarse y descargar imágenes desde Amazon ECR
+resource "aws_iam_role_policy_attachment" "ecr_read_only" {
+  role       = aws_iam_role.backend_ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
