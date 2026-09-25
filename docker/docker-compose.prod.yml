@@ -1,0 +1,54 @@
+services:
+  # ----------------------------------------------------------------------------
+  # SERVICIO DE BACKEND (NODE.JS + MEDIASOUP SFU)
+  # ----------------------------------------------------------------------------
+  orbit-backend:
+    image: ${ECR_REGISTRY}/orbit-backend:${IMAGE_TAG:-latest}
+    container_name: orbit-backend
+    restart: unless-stopped
+    # network_mode: host es indispensable para Mediasoup (WebRTC SFU):
+    # - Elimina la sobrecarga del puente de red y NAT de Docker para 100 puertos UDP (10000-10100).
+    # - Permite a Mediasoup vincular sockets directamente a la Elastic IP física del host.
+    # - Expone el puerto 3000 en localhost para ser consumido de inmediato por Nginx.
+    network_mode: "host"
+    env_file:
+      - .env.production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # REVERSE PROXY NGINX (TERMINACIÓN SSL + WEBSOCKETS UPGRADE)
+  # ----------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: orbit-nginx
+    restart: unless-stopped
+    network_mode: "host"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - orbit-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ----------------------------------------------------------------------------
+  # CERTBOT (RENOVACIÓN AUTOMÁTICA DE CERTIFICADOS SSL LET'S ENCRYPT)
+  # ----------------------------------------------------------------------------
+  certbot:
+    image: certbot/certbot:latest
+    container_name: orbit-certbot
+    restart: unless-stopped
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Ejecuta verificación de renovación cada 12 horas
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
