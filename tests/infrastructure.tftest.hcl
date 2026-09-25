@@ -95,3 +95,33 @@ run "verify_backend_resources" {
     error_message = "La partition key de la tabla DynamoDB debe ser obligatoriamente 'LockID'"
   }
 }
+
+run "verify_media_storage_bucket" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.media_storage.bucket == "orbit-media-storage-dev"
+    error_message = "El bucket de almacenamiento multimedia debe nombrarse orbit-media-storage-dev"
+  }
+
+  assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.media_storage_encryption.rule).apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    error_message = "El bucket de almacenamiento multimedia debe estar cifrado con algoritmo AES256"
+  }
+
+  assert {
+    condition     = contains(one(aws_s3_bucket_cors_configuration.media_storage_cors.cors_rule).allowed_methods, "GET") && contains(one(aws_s3_bucket_cors_configuration.media_storage_cors.cors_rule).allowed_methods, "PUT") && contains(one(aws_s3_bucket_cors_configuration.media_storage_cors.cors_rule).allowed_methods, "POST")
+    error_message = "Las reglas CORS deben permitir los métodos GET, PUT y POST"
+  }
+}
+
+
+run "verify_backend_media_iam_permissions" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_policy.s3_media_access.name == "orbit-backend-s3-media-dev"
+    error_message = "La política IAM de acceso a media debe llamarse orbit-backend-s3-media-dev"
+  }
+}
+

@@ -69,3 +69,39 @@ resource "aws_iam_instance_profile" "backend_instance_profile" {
     Environment = var.environment
   }
 }
+
+# Política IAM de menor privilegio para acceso al bucket S3 de almacenamiento multimedia (multer-s3)
+resource "aws_iam_policy" "s3_media_access" {
+  name        = "${var.project_name}-backend-s3-media-${var.environment}"
+  description = "Permite a la instancia EC2 subir, leer y eliminar avatares e imágenes en S3 sin credenciales estáticas"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowListMediaBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.media_storage.arn
+      },
+      {
+        Sid    = "AllowManageMediaObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.media_storage.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "s3_media_attachment" {
+  role       = aws_iam_role.backend_ec2_role.name
+  policy_arn = aws_iam_policy.s3_media_access.arn
+}
+

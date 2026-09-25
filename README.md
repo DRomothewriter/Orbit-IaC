@@ -41,13 +41,18 @@ Orbit-IaC/
 ├── backend_resources.tf        # Declaración de recursos para el backend remoto (S3 + DynamoDB)
 ├── network.tf                  # Resolución de Default VPC y subred pública
 ├── security_groups.tf          # Firewall para HTTP (80), HTTPS (443) y Mediasoup UDP (10000-10100)
-├── iam.tf                      # Rol IAM, Instance Profile y políticas para AWS SSM
+├── iam.tf                      # Rol IAM, Instance Profile, políticas SSM y permisos S3 Media
 ├── user_data.sh                # Script de bootstrap con Docker, Docker Compose y SSM Agent
 ├── ec2.tf                      # Instancia EC2 Ubuntu 24.04, volumen cifrado gp3 y Elastic IP
-├── outputs.tf                  # Salidas y metadatos exportados (incluye IP pública del backend)
+├── media_storage.tf            # Bucket S3 de media (avatares, chat) con SSE-S3, CORS y lectura pública
+├── outputs.tf                  # Salidas exportadas (IP pública, bucket de medios, ARNs)
 ├── terraform.tfvars.example    # Plantilla de variables para entornos
+├── tests/                      # Suite de pruebas unitarias automatizadas (TDD) con terraform test
+│   └── infrastructure.tftest.hcl
+├── SCALING_STRATEGY.md         # Hoja de ruta arquitectónica para escalado a 10,000+ usuarios
 └── README.md                   # Documentación de arquitectura y operaciones
 ```
+
 
 ---
 
@@ -58,6 +63,10 @@ Orbit-IaC/
 2. **Cero Sobrecosto de Orquestación:** Evitamos Kubernetes administrado (AWS EKS cobra $73 USD/mes solo por el plano de control). En su lugar, el backend corre en contenedores con **Docker Compose** orquestado sobre una única instancia EC2 (`t3.small` / `t3.medium`).
 3. **Terminación SSL y Proxy Inverso:** Un contenedor ligero de **Nginx** recibe el tráfico en los puertos `80` y `443` con certificados SSL/TLS automáticos de Let's Encrypt, redirigiendo a Node.js interna y limpiamente.
 4. **Elastic IP Dedicada:** La dirección IP pública estática se asigna a la EC2 sin intermediarios, permitiendo que la variable `MEDIASOUP_ANNOUNCED_IP` resuelva con latencia mínima.
+
+### Almacenamiento Multimedia y Seguridad IAM (Sin Secretos en `.env`)
+- **Bucket S3 para Media (`media_storage.tf`):** Los avatares e imágenes subidas mediante `multer-s3` se almacenan en un bucket dedicado con cifrado `AES256` (SSE-S3), reglas CORS configuradas para el frontend y lectura pública de objetos (`s3:GetObject`).
+- **Autenticación Vía IAM Instance Profile:** El backend de Node.js no requiere variables `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` estáticas en `.env`. La política `s3_media_access` adjunta al rol de la EC2 le otorga permisos automáticos y rotativos de menor privilegio (`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`).
 
 
 ---
