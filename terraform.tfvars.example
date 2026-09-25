@@ -32,4 +32,11 @@ cors_allowed_origins = [
   "https://orbit.diego-romo-dev.com"
 ]
 
+# Configuración de Dominios y DNS en Route 53
+root_domain_name       = "diego-romo-dev.com"
+frontend_subdomain     = "orbit"     # Resulta en orbit.diego-romo-dev.com
+backend_subdomain      = "api.orbit" # Resulta en api.orbit.diego-romo-dev.com
+create_route53_records = true
+
+
 

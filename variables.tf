@@ -60,4 +60,29 @@ variable "cors_allowed_origins" {
   ]
 }
 
+variable "root_domain_name" {
+  description = "Dominio raíz administrado en Route 53 (Hosted Zone)"
+  type        = string
+  default     = "diego-romo-dev.com"
+}
+
+variable "frontend_subdomain" {
+  description = "Subdominio donde se alojará el cliente web de Orbit"
+  type        = string
+  default     = "orbit"
+}
+
+variable "backend_subdomain" {
+  description = "Subdominio donde se expondrá la API y WebSockets del backend"
+  type        = string
+  default     = "api.orbit"
+}
+
+variable "create_route53_records" {
+  description = "Indica si se deben crear los registros DNS en Route 53 de forma automatizada"
+  type        = bool
+  default     = true
+}
+
+
 

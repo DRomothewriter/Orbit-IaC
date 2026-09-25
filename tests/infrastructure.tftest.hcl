@@ -32,6 +32,32 @@ override_data {
   }
 }
 
+override_data {
+  target = data.aws_route53_zone.primary
+  values = {
+    zone_id = "Z0123456789ABCDEF"
+    name    = "diego-romo-dev.com"
+  }
+}
+
+override_resource {
+  target = aws_acm_certificate.frontend_cert
+  values = {
+    arn         = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    domain_name = "orbit.diego-romo-dev.com"
+    domain_validation_options = [
+      {
+        domain_name           = "orbit.diego-romo-dev.com"
+        resource_record_name  = "_a79865eb4cd1a6ab990a45779b4e0b96.orbit.diego-romo-dev.com."
+        resource_record_type  = "CNAME"
+        resource_record_value = "_x2.acm-validations.aws."
+      }
+    ]
+  }
+}
+
+
+
 
 
 run "verify_security_group_rules" {
@@ -124,4 +150,57 @@ run "verify_backend_media_iam_permissions" {
     error_message = "La política IAM de acceso a media debe llamarse orbit-backend-s3-media-dev"
   }
 }
+
+run "verify_frontend_storage_and_oac" {
+  command = plan
+
+  assert {
+    condition     = aws_s3_bucket.frontend_static.bucket == "orbit-frontend-static-dev"
+    error_message = "El bucket de frontend debe llamarse orbit-frontend-static-dev"
+  }
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.frontend_oac.name == "orbit-frontend-oac-dev"
+    error_message = "El OAC de CloudFront debe llamarse orbit-frontend-oac-dev"
+  }
+}
+
+run "verify_cloudfront_distribution_and_spa_routing" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudfront_distribution.frontend.default_root_object == "index.html"
+    error_message = "El default_root_object de CloudFront debe ser index.html"
+  }
+
+  assert {
+    condition     = length([for e in aws_cloudfront_distribution.frontend.custom_error_response : e if e.error_code == 403 && e.response_code == 200 && e.response_page_path == "/index.html"]) == 1
+    error_message = "CloudFront debe redirigir el error 403 a /index.html con código 200 para Angular SPA"
+  }
+
+  assert {
+    condition     = length([for e in aws_cloudfront_distribution.frontend.custom_error_response : e if e.error_code == 404 && e.response_code == 200 && e.response_page_path == "/index.html"]) == 1
+    error_message = "CloudFront debe redirigir el error 404 a /index.html con código 200 para Angular SPA"
+  }
+}
+
+run "verify_dns_and_certificates" {
+  command = plan
+
+  assert {
+    condition     = aws_acm_certificate.frontend_cert.domain_name == "orbit.diego-romo-dev.com"
+    error_message = "El certificado ACM debe ser emitido para orbit.diego-romo-dev.com"
+  }
+
+  assert {
+    condition     = aws_route53_record.frontend.name == "orbit.diego-romo-dev.com"
+    error_message = "El registro DNS del frontend debe ser orbit.diego-romo-dev.com"
+  }
+
+  assert {
+    condition     = aws_route53_record.backend_api.name == "api.orbit.diego-romo-dev.com"
+    error_message = "El registro DNS del backend debe ser api.orbit.diego-romo-dev.com"
+  }
+}
+
 
