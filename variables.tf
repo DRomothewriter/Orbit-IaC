@@ -30,3 +30,22 @@ variable "tags" {
     ManagedBy = "Terraform"
   }
 }
+
+variable "instance_type" {
+  description = "Tipo de instancia EC2 para el backend (t3.small o t3.medium recomendado para Mediasoup)"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "root_volume_size" {
+  description = "Tamaño en GiB del volumen EBS raíz (gp3) para la instancia EC2"
+  type        = number
+  default     = 30
+}
+
+variable "admin_ssh_cidr" {
+  description = "Lista de bloques CIDR autorizados para acceso SSH (puerto 22). Vacío por defecto al usar AWS SSM"
+  type        = list(string)
+  default     = []
+}
+

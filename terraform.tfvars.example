@@ -15,3 +15,12 @@ tags = {
   ManagedBy   = "Terraform"
   Repository  = "https://github.com/DRomothewriter/Orbit-IaC"
 }
+
+# Configuración de cómputo EC2 para Backend y Mediasoup
+instance_type    = "t3.small" # Usar t3.medium para entornos con mayor carga concurrente de WebRTC
+root_volume_size = 30         # GiB
+
+# Acceso SSH de administración (dejar vacío si se accede mediante AWS SSM Session Manager)
+# admin_ssh_cidr   = ["203.0.113.10/32"]
+admin_ssh_cidr   = []
+
