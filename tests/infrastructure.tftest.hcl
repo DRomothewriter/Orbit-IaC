@@ -231,5 +231,20 @@ run "verify_github_actions_oidc_role" {
   }
 }
 
+run "verify_ec2_orchestration_setup" {
+  command = plan
+
+  assert {
+    condition     = strcontains(aws_instance.backend.user_data, "/opt/orbit")
+    error_message = "El script user_data debe configurar el directorio de orquestación /opt/orbit en la EC2"
+  }
+
+  assert {
+    condition     = strcontains(aws_instance.backend.user_data, "docker-compose.prod.yml")
+    error_message = "El script user_data debe preparar la configuración de docker-compose.prod.yml"
+  }
+}
+
+
 
 

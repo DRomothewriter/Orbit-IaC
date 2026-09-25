@@ -56,4 +56,18 @@ systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || true
 docker --version
 docker compose version
 
+# 6. Preparación del directorio de orquestación para producción (/opt/orbit)
+echo "[Orbit Bootstrap] Creando estructura de directorios en /opt/orbit..."
+mkdir -p /opt/orbit/nginx/conf.d
+mkdir -p /opt/orbit/certbot/conf
+mkdir -p /opt/orbit/certbot/www
+mkdir -p /opt/orbit/scripts
+
+# Crear archivo marcador de docker-compose.prod.yml para despliegue
+touch /opt/orbit/docker-compose.prod.yml
+
+chown -R ubuntu:ubuntu /opt/orbit
+chmod -R 755 /opt/orbit
+
 echo "[Orbit Bootstrap] Aprovisionamiento completado exitosamente en $(date)"
+

@@ -48,7 +48,15 @@ Orbit-IaC/
 ├── frontend.tf                 # Hosting Angular S3 privado + CloudFront CDN + OAC + SPA routing
 ├── dns.tf                      # Registros Route 53 y certificado SSL ACM (us-east-1)
 ├── cicd_oidc.tf                # Registro ECR, proveedor OIDC GitHub y rol de despliegue IAM
+├── docker/                     # Configuración de orquestación en producción
+│   ├── docker-compose.prod.yml # Compose con backend (host mode), Nginx y Certbot
+│   ├── nginx/                  # Configuración de Nginx con soporte para WebSockets y SSL
+│   │   ├── nginx.conf
+│   │   └── conf.d/orbit.conf
+│   ├── scripts/init-ssl.sh     # Script bootstrap para certificados Let's Encrypt
+│   └── .env.production.template# Plantilla de variables de producción
 ├── outputs.tf                  # Salidas exportadas (IP pública, URLs de frontend y backend, ARNs)
+
 ├── terraform.tfvars.example    # Plantilla de variables para entornos
 ├── tests/                      # Suite de pruebas unitarias automatizadas (TDD) con terraform test
 │   └── infrastructure.tftest.hcl
@@ -83,6 +91,12 @@ Orbit-IaC/
   1. Build y push de imágenes a ECR sin almacenar credenciales `AWS_ACCESS_KEY_ID` estáticas.
   2. Despliegue estático de Angular a S3 e invalidación de caché en CloudFront.
   3. Ejecución de despliegues en la EC2 mediante **AWS SSM SendCommand** (`AWS-RunShellScript`).
+
+### Orquestación en Producción (`docker/`)
+- **Backend en `network_mode: host`:** Configuración esencial para Mediasoup SFU; elimina la sobrecarga del puente de red y permite que los 100 puertos multimedia UDP (`10000-10100`) se vinculen directamente a la interfaz física de la máquina.
+- **Nginx Reverse Proxy con Soporte WebSockets:** Termina el tráfico SSL con certificados de Let's Encrypt para `api.orbit.diego-romo-dev.com`, reenviando las peticiones a `127.0.0.1:3000` con encabezados `Upgrade` y `Connection` para mantener los canales de Socket.io en streaming constante sin degradación.
+- **Certbot Automático:** Contenedor auxiliar que renueva los certificados SSL cada 12 horas de forma transparente.
+- **Inicialización:** Script `docker/scripts/init-ssl.sh` para solicitar los certificados iniciales y recargar Nginx en el primer despliegue.
 
 
 ---
