@@ -45,13 +45,16 @@ Orbit-IaC/
 ├── user_data.sh                # Script de bootstrap con Docker, Docker Compose y SSM Agent
 ├── ec2.tf                      # Instancia EC2 Ubuntu 24.04, volumen cifrado gp3 y Elastic IP
 ├── media_storage.tf            # Bucket S3 de media (avatares, chat) con SSE-S3, CORS y lectura pública
-├── outputs.tf                  # Salidas exportadas (IP pública, bucket de medios, ARNs)
+├── frontend.tf                 # Hosting Angular S3 privado + CloudFront CDN + OAC + SPA routing
+├── dns.tf                      # Registros Route 53 y certificado SSL ACM (us-east-1)
+├── outputs.tf                  # Salidas exportadas (IP pública, URLs de frontend y backend, ARNs)
 ├── terraform.tfvars.example    # Plantilla de variables para entornos
 ├── tests/                      # Suite de pruebas unitarias automatizadas (TDD) con terraform test
 │   └── infrastructure.tftest.hcl
 ├── SCALING_STRATEGY.md         # Hoja de ruta arquitectónica para escalado a 10,000+ usuarios
 └── README.md                   # Documentación de arquitectura y operaciones
 ```
+
 
 
 ---
@@ -67,6 +70,11 @@ Orbit-IaC/
 ### Almacenamiento Multimedia y Seguridad IAM (Sin Secretos en `.env`)
 - **Bucket S3 para Media (`media_storage.tf`):** Los avatares e imágenes subidas mediante `multer-s3` se almacenan en un bucket dedicado con cifrado `AES256` (SSE-S3), reglas CORS configuradas para el frontend y lectura pública de objetos (`s3:GetObject`).
 - **Autenticación Vía IAM Instance Profile:** El backend de Node.js no requiere variables `AWS_ACCESS_KEY_ID` ni `AWS_SECRET_ACCESS_KEY` estáticas en `.env`. La política `s3_media_access` adjunta al rol de la EC2 le otorga permisos automáticos y rotativos de menor privilegio (`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:ListBucket`).
+
+### Distribución Global del Frontend (Angular SPA) y DNS
+- **Bucket S3 Privado y CloudFront OAC (`frontend.tf`):** Los artefactos estáticos compilados de Angular (`dist/orbit-frontend/browser`) residen en un bucket 100% privado. El acceso se restringe exclusivamente a CloudFront mediante **Origin Access Control (OAC)** con firma criptográfica SigV4.
+- **Soporte Nativo de Angular SPA Routing:** Respuestas de error HTTP `403` y `404` se capturan en CloudFront y se redirigen automáticamente a `/index.html` con status `200`, permitiendo que el enrutador de Angular gestione rutas profundas sin errores al recargar.
+- **Certificados SSL y DNS (`dns.tf`):** Certificado SSL emitido y validado automáticamente en ACM (`us-east-1`). En Route 53, `orbit.diego-romo-dev.com` se enlaza mediante un registro Alias `A` a CloudFront y `api.orbit.diego-romo-dev.com` mediante registro `A` a la Elastic IP del backend.
 
 
 ---

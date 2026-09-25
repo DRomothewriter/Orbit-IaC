@@ -63,4 +63,35 @@ output "media_bucket_domain_name" {
   value       = aws_s3_bucket.media_storage.bucket_regional_domain_name
 }
 
+output "frontend_bucket_name" {
+  description = "Nombre del bucket S3 privado que hospeda los archivos estáticos de Angular"
+  value       = aws_s3_bucket.frontend_static.id
+}
+
+output "frontend_bucket_arn" {
+  description = "ARN del bucket S3 del frontend"
+  value       = aws_s3_bucket.frontend_static.arn
+}
+
+output "cloudfront_distribution_id" {
+  description = "Identificador único de la distribución de CloudFront"
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
+output "cloudfront_domain_name" {
+  description = "Nombre de dominio asignado por CloudFront (ej. d123456789.cloudfront.net)"
+  value       = aws_cloudfront_distribution.frontend.domain_name
+}
+
+output "frontend_url" {
+  description = "URL principal de acceso al frontend de Orbit"
+  value       = "https://${local.frontend_fqdn}"
+}
+
+output "api_url" {
+  description = "URL principal de acceso a la API del backend de Orbit"
+  value       = "https://${local.backend_fqdn}"
+}
+
+
 
