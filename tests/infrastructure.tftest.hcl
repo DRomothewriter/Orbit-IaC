@@ -245,6 +245,15 @@ run "verify_ec2_orchestration_setup" {
   }
 }
 
+run "verify_ec2_ecr_read_access" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_role_policy_attachment.ecr_read_only.policy_arn == "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+    error_message = "La instancia EC2 debe tener adjunta la política AmazonEC2ContainerRegistryReadOnly para poder hacer docker pull desde ECR"
+  }
+}
+
 
 
 
