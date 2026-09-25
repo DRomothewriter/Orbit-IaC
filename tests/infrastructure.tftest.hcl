@@ -203,4 +203,33 @@ run "verify_dns_and_certificates" {
   }
 }
 
+run "verify_ecr_repository_and_lifecycle" {
+  command = plan
+
+  assert {
+    condition     = aws_ecr_repository.backend.name == "orbit-backend"
+    error_message = "El nombre del repositorio ECR debe ser orbit-backend"
+  }
+
+  assert {
+    condition     = aws_ecr_repository.backend.image_scanning_configuration[0].scan_on_push == true
+    error_message = "El escaneo de vulnerabilidades scan_on_push debe estar habilitado en ECR"
+  }
+}
+
+run "verify_github_actions_oidc_role" {
+  command = plan
+
+  assert {
+    condition     = aws_iam_openid_connect_provider.github_actions.url == "https://token.actions.githubusercontent.com"
+    error_message = "La URL del proveedor OIDC debe ser https://token.actions.githubusercontent.com"
+  }
+
+  assert {
+    condition     = aws_iam_role.github_actions.name == "orbit-github-actions-role-dev"
+    error_message = "El rol IAM para GitHub Actions debe nombrarse orbit-github-actions-role-dev"
+  }
+}
+
+
 

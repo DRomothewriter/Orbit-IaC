@@ -93,5 +93,21 @@ output "api_url" {
   value       = "https://${local.backend_fqdn}"
 }
 
+output "ecr_repository_url" {
+  description = "URL del registro privado en Amazon ECR para las imágenes Docker del backend"
+  value       = aws_ecr_repository.backend.repository_url
+}
+
+output "ecr_repository_arn" {
+  description = "ARN del repositorio privado en Amazon ECR"
+  value       = aws_ecr_repository.backend.arn
+}
+
+output "github_actions_role_arn" {
+  description = "ARN del rol IAM que debe configurar GitHub Actions para autenticación federada OIDC"
+  value       = aws_iam_role.github_actions.arn
+}
+
+
 
 

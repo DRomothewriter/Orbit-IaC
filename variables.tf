@@ -84,5 +84,24 @@ variable "create_route53_records" {
   default     = true
 }
 
+variable "github_org_or_user" {
+  description = "Usuario u organización de GitHub propietario de los repositorios de Orbit"
+  type        = string
+  default     = "DRomothewriter"
+}
+
+variable "github_repositories" {
+  description = "Lista de nombres de repositorios autorizados para asumir el rol OIDC de despliegue"
+  type        = list(string)
+  default     = ["Orbit-Backend", "Orbit-Frontend", "Orbit-IaC"]
+}
+
+variable "ecr_image_retention_count" {
+  description = "Cantidad máxima de imágenes Docker retenidas en ECR por la política de ciclo de vida"
+  type        = number
+  default     = 5
+}
+
+
 
 

@@ -47,6 +47,7 @@ Orbit-IaC/
 ├── media_storage.tf            # Bucket S3 de media (avatares, chat) con SSE-S3, CORS y lectura pública
 ├── frontend.tf                 # Hosting Angular S3 privado + CloudFront CDN + OAC + SPA routing
 ├── dns.tf                      # Registros Route 53 y certificado SSL ACM (us-east-1)
+├── cicd_oidc.tf                # Registro ECR, proveedor OIDC GitHub y rol de despliegue IAM
 ├── outputs.tf                  # Salidas exportadas (IP pública, URLs de frontend y backend, ARNs)
 ├── terraform.tfvars.example    # Plantilla de variables para entornos
 ├── tests/                      # Suite de pruebas unitarias automatizadas (TDD) con terraform test
@@ -75,6 +76,13 @@ Orbit-IaC/
 - **Bucket S3 Privado y CloudFront OAC (`frontend.tf`):** Los artefactos estáticos compilados de Angular (`dist/orbit-frontend/browser`) residen en un bucket 100% privado. El acceso se restringe exclusivamente a CloudFront mediante **Origin Access Control (OAC)** con firma criptográfica SigV4.
 - **Soporte Nativo de Angular SPA Routing:** Respuestas de error HTTP `403` y `404` se capturan en CloudFront y se redirigen automáticamente a `/index.html` con status `200`, permitiendo que el enrutador de Angular gestione rutas profundas sin errores al recargar.
 - **Certificados SSL y DNS (`dns.tf`):** Certificado SSL emitido y validado automáticamente en ACM (`us-east-1`). En Route 53, `orbit.diego-romo-dev.com` se enlaza mediante un registro Alias `A` a CloudFront y `api.orbit.diego-romo-dev.com` mediante registro `A` a la Elastic IP del backend.
+
+### Automatización de CI/CD con ECR y OIDC (Cero Llaves en GitHub Secrets)
+- **Registro de Contenedores ECR (`cicd_oidc.tf`):** Repositorio privado `orbit-backend` con escaneo de vulnerabilidades `scan_on_push = true` y política de ciclo de vida que conserva únicamente las últimas 5 imágenes para controlar costes.
+- **Autenticación OIDC de GitHub Actions:** Proveedor OpenID Connect federado con rol IAM de menor privilegio asumible exclusivamente por los repositorios de Orbit. Permite:
+  1. Build y push de imágenes a ECR sin almacenar credenciales `AWS_ACCESS_KEY_ID` estáticas.
+  2. Despliegue estático de Angular a S3 e invalidación de caché en CloudFront.
+  3. Ejecución de despliegues en la EC2 mediante **AWS SSM SendCommand** (`AWS-RunShellScript`).
 
 
 ---
