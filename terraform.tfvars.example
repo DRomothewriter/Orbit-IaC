@@ -1,0 +1,17 @@
+# ==============================================================================
+# ORBIT INFRASTRUCTURE AS CODE - CONFIGURACIÓN DE VARIABLES DE EJEMPLO
+# ==============================================================================
+# Copia este archivo a 'terraform.tfvars' y completa con tus valores correspondientes.
+# NUNCA subas 'terraform.tfvars' a control de versiones (ya está protegido en .gitignore).
+
+aws_region   = "us-east-2"
+environment  = "dev"
+project_name = "orbit"
+domain_name  = "orbitapp.dev"
+
+tags = {
+  Project     = "Orbit"
+  Environment = "dev"
+  ManagedBy   = "Terraform"
+  Repository  = "https://github.com/DRomothewriter/Orbit-IaC"
+}
