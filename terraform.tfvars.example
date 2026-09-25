@@ -38,5 +38,11 @@ frontend_subdomain     = "orbit"     # Resulta en orbit.diego-romo-dev.com
 backend_subdomain      = "api.orbit" # Resulta en api.orbit.diego-romo-dev.com
 create_route53_records = true
 
+# Configuración de CI/CD con GitHub Actions y ECR
+github_org_or_user        = "DRomothewriter"
+github_repositories       = ["Orbit-Backend", "Orbit-Frontend", "Orbit-IaC"]
+ecr_image_retention_count = 5
+
+
 
 
