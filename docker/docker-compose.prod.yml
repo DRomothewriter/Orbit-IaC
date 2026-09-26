@@ -2,7 +2,7 @@ services:
   # ----------------------------------------------------------------------------
   # SERVICIO DE BACKEND (NODE.JS + MEDIASOUP SFU)
   # ----------------------------------------------------------------------------
-  orbit-backend:
+  backend:
     image: ${ECR_REGISTRY}/orbit-backend:${IMAGE_TAG:-latest}
     container_name: orbit-backend
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
     depends_on:
-      - orbit-backend
+      - backend
     logging:
       driver: "json-file"
       options:

@@ -62,9 +62,10 @@ resource "aws_acm_certificate_validation" "frontend_cert" {
 
 # Registro Alias tipo A para el frontend apuntando a la distribución de CloudFront
 resource "aws_route53_record" "frontend" {
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = local.frontend_fqdn
-  type    = "A"
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = local.frontend_fqdn
+  type            = "A"
+  allow_overwrite = true
 
   alias {
     name                   = aws_cloudfront_distribution.frontend.domain_name
@@ -75,9 +76,10 @@ resource "aws_route53_record" "frontend" {
 
 # Registro tipo A para la API del backend apuntando a la Elastic IP de la EC2
 resource "aws_route53_record" "backend_api" {
-  zone_id = data.aws_route53_zone.primary.zone_id
-  name    = local.backend_fqdn
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.backend_eip.public_ip]
+  zone_id         = data.aws_route53_zone.primary.zone_id
+  name            = local.backend_fqdn
+  type            = "A"
+  ttl             = 300
+  records         = [aws_eip.backend_eip.public_ip]
+  allow_overwrite = true
 }
