@@ -35,10 +35,8 @@ if [ ! -f "$CERT_PATH/privkey.pem" ]; then
 fi
 
 echo "[Init-SSL] Levantando Nginx para validación ACME..."
-docker compose -f docker-compose.prod.yml up --force-recreate -d nginx
-
-echo "[Init-SSL] Eliminando certificado temporal..."
-rm -rf "$CERT_PATH"
+docker compose -f docker-compose.prod.yml up --no-deps -d nginx
+sleep 3
 
 echo "[Init-SSL] Solicitando certificado real a Let's Encrypt para $DOMAIN..."
 docker compose -f docker-compose.prod.yml run --rm --entrypoint "\
@@ -47,6 +45,7 @@ docker compose -f docker-compose.prod.yml run --rm --entrypoint "\
     -d $DOMAIN \
     --rsa-key-size $RSA_KEY_SIZE \
     --agree-tos \
+    --no-eff-email \
     --force-renewal \
     --non-interactive" certbot
 

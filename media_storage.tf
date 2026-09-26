@@ -7,7 +7,7 @@ resource "aws_s3_bucket" "media_storage" {
 
   tags = {
     Name        = "${var.project_name}-media-storage-${var.environment}"
-    Purpose     = "Media Storage (Avatars and Chat Images)"
+    Purpose     = "Media Storage Avatars and Chat Images"
     Environment = var.environment
   }
 }
