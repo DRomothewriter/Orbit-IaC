@@ -47,14 +47,21 @@ apt-get install -y \
 systemctl enable --now docker
 usermod -aG docker ubuntu
 
-# 4. Instalación y verificación de AWS SSM Agent
+# 4. Instalación y verificación de AWS SSM Agent y AWS CLI v2
 echo "[Orbit Bootstrap] Asegurando instalación y arranque de Amazon SSM Agent..."
 snap install amazon-ssm-agent --classic || true
 systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service || true
 
+echo "[Orbit Bootstrap] Instalando AWS CLI v2..."
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/aws /tmp/awscliv2.zip
+
 # 5. Verificación de versiones instaladas
 docker --version
 docker compose version
+aws --version
 
 # 6. Preparación del directorio de orquestación para producción (/opt/orbit)
 echo "[Orbit Bootstrap] Creando estructura de directorios en /opt/orbit..."
