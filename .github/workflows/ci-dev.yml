@@ -1,0 +1,183 @@
+name: CI Dev Security & IaC Validation
+
+on:
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-terraform:
+    name: Validate Branch, State Guard & Terraform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate source branch policy and naming convention
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" = "main" ]; then
+            echo "::error::No se permite abrir Pull Requests directamente desde 'main' hacia 'dev'."
+            exit 1
+          fi
+
+          if ! [[ "$HEAD_REF" =~ ^(feature/|bug/|fix/|docs/|chore/|refactor/|test/|dependabot/) ]]; then
+            echo "::warning::La rama '$HEAD_REF' no sigue un prefijo recomendado (feature/, bug/, fix/, docs/, chore/, refactor/, test/, dependabot/)."
+          else
+            echo "Rama origen válida: $HEAD_REF"
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Anti-tfstate and tfvars guard
+        run: |
+          SENSITIVE_FILES=$(git ls-files | grep -E '(^|/)(.*\.tfstate(\.backup)?|terraform[.]tfvars)$' | grep -v '\.example$' || true)
+          if [ -n "$SENSITIVE_FILES" ]; then
+            echo "::error::Se detectaron archivos *.tfstate, *.tfstate.backup o terraform.tfvars rastreados en Git (excluyendo *.example):"
+            echo "$SENSITIVE_FILES"
+            exit 1
+          fi
+          echo "Anti-tfstate/tfvars guard superado sin archivos sensibles rastreados."
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init (backend disabled)
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+  secret-scanning:
+    name: Secret Scanning (TruffleHog)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog verified secret scan
+        id: trufflehog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+
+      - name: Record TruffleHog scan metadata
+        if: always()
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SCAN_OUTCOME: ${{ steps.trufflehog.outcome }}
+        run: |
+          cat <<EOF > trufflehog-results.json
+          {
+            "tool": "trufflehog",
+            "base": "${BASE_SHA}",
+            "head": "${HEAD_SHA}",
+            "extra_args": "--only-verified",
+            "outcome": "${SCAN_OUTCOME}"
+          }
+          EOF
+
+      - name: Upload TruffleHog scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-secrets-reports
+          path: trufflehog-results.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  iac-lint-and-security:
+    name: IaC Lint & Security (TFLint & Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+      - name: Initialize TFLint plugins
+        run: tflint --init
+
+      - name: Run TFLint (SARIF)
+        id: tflint
+        continue-on-error: true
+        run: tflint --format sarif > tflint.sarif
+
+      - name: Run Trivy Config scan on Terraform, Docker Compose & Nginx (HIGH/CRITICAL gate)
+        id: trivy-config
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+
+      - name: Verify Docker Compose and Nginx targets with Trivy Config
+        id: trivy-docker-nginx
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: docker/
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          trivyignores: .trivyignore
+        # Explicit coverage for docker/docker-compose.prod.yml and docker/nginx/
+
+      - name: Upload TFLint SARIF to GitHub Security
+        if: always() && hashFiles('tflint.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tflint.sarif
+          category: tflint
+
+      - name: Upload Trivy Config SARIF to GitHub Security
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      - name: Upload Dev IaC Security reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-iac-security-reports
+          path: |
+            tflint.sarif
+            trivy-config.sarif
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Enforce TFLint & Trivy HIGH/CRITICAL fail-gate
+        if: steps.tflint.outcome == 'failure' || steps.trivy-config.outcome == 'failure' || steps.trivy-docker-nginx.outcome == 'failure'
+        run: |
+          echo "::error::TFLint o Trivy Config detectaron hallazgos bloqueantes (docker/docker-compose.prod.yml, docker/nginx/ o Terraform)."
+          exit 1

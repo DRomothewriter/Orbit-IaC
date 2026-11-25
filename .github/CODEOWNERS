@@ -1,0 +1,9 @@
+# Orbit-IaC Security, Terraform & Infrastructure CODEOWNERS
+/.github/ @DRomothewriter
+*.tf @DRomothewriter
+/docker/ @DRomothewriter
+/user_data.sh @DRomothewriter
+/.tflint.hcl @DRomothewriter
+/.coderabbit.yaml @DRomothewriter
+/sonar-project.properties @DRomothewriter
+/scripts/ @DRomothewriter
