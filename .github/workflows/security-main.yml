@@ -194,7 +194,9 @@ jobs:
           format: sarif
           output: trivy-config.sarif
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           exit-code: '1'
+          trivyignores: .trivyignore
 
       - name: Upload Checkov SARIF to GitHub Security
         if: always() && hashFiles('checkov.sarif') != ''

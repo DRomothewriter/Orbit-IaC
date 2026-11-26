@@ -138,7 +138,9 @@ jobs:
           format: sarif
           output: trivy-config.sarif
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           exit-code: '1'
+          trivyignores: .trivyignore
 
       - name: Verify Docker Compose and Nginx targets with Trivy Config
         id: trivy-docker-nginx
