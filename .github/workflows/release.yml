@@ -107,7 +107,7 @@ jobs:
       - name: Final IaC security gate - Checkov
         run: |
           pip install --no-cache-dir checkov
-          checkov -d . --framework terraform docker_compose
+          checkov -d . --framework terraform yaml
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -192,7 +192,7 @@ jobs:
       contents: read
     steps:
       - name: Download signed release bundle artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-iac-bundle-${{ needs.build-sign-attest.outputs.release_tag }}
           path: release-bundle
