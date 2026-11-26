@@ -119,6 +119,8 @@ jobs:
         uses: terraform-linters/setup-tflint@v4
 
       - name: Initialize TFLint plugins
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: tflint --init
 
       - name: Run TFLint (SARIF)
