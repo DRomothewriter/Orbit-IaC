@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload Snyk IaC reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sast-snyk-iac-reports
           path: snyk-iac.sarif
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload Compliance & IaC reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iac-compliance-reports
           path: |
@@ -287,7 +287,7 @@ jobs:
 
       - name: Upload SBOM & Grype reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-and-grype-reports
           path: |
@@ -342,7 +342,7 @@ jobs:
 
       - name: Upload Terraform Plan Preview artifact
         if: always() && steps.aws-check.outputs.configured == 'true' && hashFiles('terraform-plan-preview.txt') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-preview
           path: terraform-plan-preview.txt
