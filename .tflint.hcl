@@ -12,3 +12,8 @@ plugin "aws" {
   version = "0.35.0"
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
+
+# Variables reservadas para compatibilidad con terraform.tfvars.example
+rule "terraform_unused_declarations" {
+  enabled = false
+}
