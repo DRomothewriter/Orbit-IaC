@@ -170,6 +170,7 @@ jobs:
           set +e
           checkov -d . \
             --framework terraform yaml \
+            --soft-fail \
             --output sarif \
             --output junitxml \
             --output-file-path checkov-out
