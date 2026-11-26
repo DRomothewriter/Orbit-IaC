@@ -130,7 +130,7 @@ jobs:
             > "cosign-verify-${RELEASE_TAG}.txt"
 
       - name: Generate GitHub Build Provenance Attestation (SLSA)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.bundle.outputs.bundle_name }}
 
