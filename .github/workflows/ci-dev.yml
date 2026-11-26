@@ -35,7 +35,7 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Anti-tfstate and tfvars guard
         run: |
@@ -67,7 +67,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout repository with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload TruffleHog scan report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-secrets-reports
           path: trufflehog-results.json
@@ -113,10 +113,10 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4
+        uses: terraform-linters/setup-tflint@v6
 
       - name: Initialize TFLint plugins
         env:
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload Dev IaC Security reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dev-iac-security-reports
           path: |

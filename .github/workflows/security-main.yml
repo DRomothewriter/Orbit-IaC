@@ -43,7 +43,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -67,7 +67,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -90,7 +90,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Determine Snyk IaC gate for Dependabot PRs
         id: snyk-gate
@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload Snyk IaC reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sast-snyk-iac-reports
           path: snyk-iac.sarif
@@ -153,7 +153,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python for Checkov
         uses: actions/setup-python@v5
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload Compliance & IaC reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: iac-compliance-reports
           path: |
@@ -240,7 +240,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify Terraform lockfile is present for SBOM
         run: test -f .terraform.lock.hcl
@@ -261,7 +261,7 @@ jobs:
 
       - name: Scan repository and .terraform.lock.hcl with Grype (HIGH/CRITICAL gate)
         id: grype-sarif
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         with:
           path: .
           fail-build: true
@@ -287,7 +287,7 @@ jobs:
 
       - name: Upload SBOM & Grype reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-and-grype-reports
           path: |
@@ -308,7 +308,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check if AWS_ROLE_ARN is configured
         id: aws-check
@@ -342,7 +342,7 @@ jobs:
 
       - name: Upload Terraform Plan Preview artifact
         if: always() && steps.aws-check.outputs.configured == 'true' && hashFiles('terraform-plan-preview.txt') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: terraform-plan-preview
           path: terraform-plan-preview.txt
