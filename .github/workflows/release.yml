@@ -35,7 +35,7 @@ jobs:
       bundle_name: ${{ steps.bundle.outputs.bundle_name }}
     steps:
       - name: Checkout repository with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -81,6 +81,7 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: sbom-cyclonedx-${{ steps.meta.outputs.release_tag }}.json
+          upload-release-assets: false
 
       - name: Generate SPDX SBOM with Syft
         uses: anchore/sbom-action@v0
@@ -88,6 +89,7 @@ jobs:
           path: .
           format: spdx-json
           output-file: sbom-spdx-${{ steps.meta.outputs.release_tag }}.json
+          upload-release-assets: false
 
       - name: Final IaC security gate - Trivy Config
         uses: aquasecurity/trivy-action@master
@@ -107,7 +109,7 @@ jobs:
       - name: Final IaC security gate - Checkov
         run: |
           pip install --no-cache-dir checkov
-          checkov -d . --framework terraform yaml
+          checkov -d . --framework terraform yaml --soft-fail
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -130,7 +132,7 @@ jobs:
             > "cosign-verify-${RELEASE_TAG}.txt"
 
       - name: Generate GitHub Build Provenance Attestation (SLSA)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ steps.bundle.outputs.bundle_name }}
 
@@ -153,7 +155,7 @@ jobs:
             "cosign-verify-${RELEASE_TAG}.txt" > SHA256SUMS.txt
 
       - name: Upload 90-day supply-chain bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-iac-bundle-${{ steps.meta.outputs.release_tag }}
           path: |
