@@ -29,12 +29,20 @@ resource "aws_security_group" "backend_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Rango UDP 10000-10100: Tráfico multimedia RTP/RTCP para Mediasoup (WebRTC SFU)
+  # Rango UDP/TCP 10000-10100: Tráfico multimedia RTP/RTCP para Mediasoup (WebRTC SFU)
   ingress {
     description = "Mediasoup WebRTC RTP/RTCP UDP media range"
     from_port   = 10000
     to_port     = 10100
     protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "Mediasoup WebRTC RTP/RTCP TCP fallback media range"
+    from_port   = 10000
+    to_port     = 10100
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
