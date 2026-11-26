@@ -33,7 +33,7 @@ resource "aws_acm_certificate" "frontend_cert" {
 # Registros DNS de validación CNAME generados automáticamente en Route 53
 resource "aws_route53_record" "cert_validation" {
   for_each = {
-    "${local.frontend_fqdn}" = {
+    (local.frontend_fqdn) = {
       name   = tolist(aws_acm_certificate.frontend_cert.domain_validation_options)[0].resource_record_name
       record = tolist(aws_acm_certificate.frontend_cert.domain_validation_options)[0].resource_record_value
       type   = tolist(aws_acm_certificate.frontend_cert.domain_validation_options)[0].resource_record_type
