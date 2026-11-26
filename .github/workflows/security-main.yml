@@ -261,7 +261,7 @@ jobs:
 
       - name: Scan repository and .terraform.lock.hcl with Grype (HIGH/CRITICAL gate)
         id: grype-sarif
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         with:
           path: .
           fail-build: true
