@@ -87,9 +87,12 @@ resource "aws_iam_role" "github_actions" {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = [
-              for repo in var.github_repositories : "repo:${var.github_org_or_user}/${repo}:*"
-            ]
+            "token.actions.githubusercontent.com:sub" = flatten([
+              for repo in var.github_repositories : [
+                "repo:${var.github_org_or_user}/${repo}:*",
+                "repo:${var.github_org_or_user}*:${repo}*:*"
+              ]
+            ])
           }
         }
       }
