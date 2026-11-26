@@ -1,0 +1,11 @@
+# Snyk (https://snyk.io) policy file
+version: v1.25.0
+ignore:
+  'SNYK-CC-TF-96':
+    - '*':
+        reason: 'El bucket S3 multimedia requiere lectura publica controlada para avatares e imagenes de chat'
+        expires: '2027-12-31T00:00:00.000Z'
+  'SNYK-CC-TF-98':
+    - '*':
+        reason: 'El bucket S3 multimedia requiere lectura publica controlada para avatares e imagenes de chat'
+        expires: '2027-12-31T00:00:00.000Z'

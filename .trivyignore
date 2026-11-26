@@ -1,0 +1,21 @@
+# ==============================================================================
+# Trivy Config Exceptions - Orbit-IaC
+# Excepciones arquitectónicas documentadas; cualquier nuevo hallazgo HIGH/CRITICAL
+# fuera de esta lista seguirá bloqueando el pipeline.
+# ==============================================================================
+
+# S3 buckets usan SSE-S3 (AES256) gratuito en lugar de KMS CMK para optimizar costes
+AWS-0132
+
+# CloudFront sin AWS WAF para evitar sobrecosto mensual en despliegue v1
+AWS-0011
+
+# ECR usa tags mutables para soportar actualización controlada de tag :latest en release.yml
+AWS-0031
+
+# Bucket S3 multimedia requiere lectura pública controlada (s3:GetObject) para avatares/chat
+AWS-0087
+AWS-0093
+
+# EC2 requiere egress abierto para pull desde ECR, apt, Let's Encrypt, SMTP y MongoDB Atlas
+AWS-0104

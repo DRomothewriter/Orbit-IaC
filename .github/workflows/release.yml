@@ -1,0 +1,232 @@
+name: Release, Supply Chain Security & Production Apply
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'SemVer tag to build and release (e.g. v1.0.1)'
+        required: true
+        type: string
+      apply_to_production:
+        description: 'Apply Terraform to production after manual approval'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: orbit-iac-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-sign-attest:
+    name: Build, SBOM, Scan & Sign Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      bundle_name: ${{ steps.bundle.outputs.bundle_name }}
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify commit belongs to origin/main and validate SemVer tag
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG_EVENT: ${{ github.event.release.tag_name }}
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$TARGET_SHA" origin/main; then
+            echo "::error::El commit $TARGET_SHA no es ancestro de origin/main."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="$RELEASE_TAG_EVENT"
+          else
+            TAG="$RELEASE_TAG_INPUT"
+          fi
+
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag inválido '$TAG'. Debe cumplir el formato SemVer ^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+            exit 1
+          fi
+
+          echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Package IaC release bundle
+        id: bundle
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          BUNDLE_NAME="orbit-iac-${RELEASE_TAG}.tar.gz"
+          tar -czf "$BUNDLE_NAME" *.tf .terraform.lock.hcl docker/ user_data.sh
+          echo "bundle_name=$BUNDLE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx-${{ steps.meta.outputs.release_tag }}.json
+
+      - name: Generate SPDX SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom-spdx-${{ steps.meta.outputs.release_tag }}.json
+
+      - name: Final IaC security gate - Trivy Config
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          trivyignores: .trivyignore
+
+      - name: Setup Python for Checkov
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Final IaC security gate - Checkov
+        run: |
+          pip install --no-cache-dir checkov
+          checkov -d . --framework terraform yaml
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign bundle with Cosign Keyless (OIDC) and verify
+        env:
+          BUNDLE_NAME: ${{ steps.bundle.outputs.bundle_name }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          cosign sign-blob --yes \
+            --bundle "${BUNDLE_NAME}.sigstore.json" \
+            "$BUNDLE_NAME"
+
+          cosign verify-blob \
+            --bundle "${BUNDLE_NAME}.sigstore.json" \
+            --certificate-identity-regexp="^https://github\.com/${REPO}/\.github/workflows/release\.yml@refs/.*$" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "$BUNDLE_NAME" \
+            > "cosign-verify-${RELEASE_TAG}.txt"
+
+      - name: Generate GitHub Build Provenance Attestation (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ steps.bundle.outputs.bundle_name }}
+
+      - name: Generate GitHub SBOM Attestation
+        uses: actions/attest-sbom@v2
+        with:
+          subject-path: ${{ steps.bundle.outputs.bundle_name }}
+          sbom-path: sbom-cyclonedx-${{ steps.meta.outputs.release_tag }}.json
+
+      - name: Generate SHA256SUMS.txt
+        env:
+          BUNDLE_NAME: ${{ steps.bundle.outputs.bundle_name }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+        run: |
+          sha256sum \
+            "$BUNDLE_NAME" \
+            "${BUNDLE_NAME}.sigstore.json" \
+            "sbom-cyclonedx-${RELEASE_TAG}.json" \
+            "sbom-spdx-${RELEASE_TAG}.json" \
+            "cosign-verify-${RELEASE_TAG}.txt" > SHA256SUMS.txt
+
+      - name: Upload 90-day supply-chain bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-iac-bundle-${{ steps.meta.outputs.release_tag }}
+          path: |
+            ${{ steps.bundle.outputs.bundle_name }}
+            ${{ steps.bundle.outputs.bundle_name }}.sigstore.json
+            sbom-cyclonedx-${{ steps.meta.outputs.release_tag }}.json
+            sbom-spdx-${{ steps.meta.outputs.release_tag }}.json
+            cosign-verify-${{ steps.meta.outputs.release_tag }}.txt
+            SHA256SUMS.txt
+          retention-days: 90
+
+      - name: Attach assets to GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          BUNDLE_NAME: ${{ steps.bundle.outputs.bundle_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            "$BUNDLE_NAME" \
+            "${BUNDLE_NAME}.sigstore.json" \
+            "sbom-cyclonedx-${RELEASE_TAG}.json" \
+            "sbom-spdx-${RELEASE_TAG}.json" \
+            "cosign-verify-${RELEASE_TAG}.txt" \
+            SHA256SUMS.txt \
+            --clobber
+
+  apply-production:
+    name: Apply Terraform to Production (Manual Approval)
+    needs: build-sign-attest
+    if: github.event_name == 'release' || inputs.apply_to_production == true
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download signed release bundle artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: release-iac-bundle-${{ needs.build-sign-attest.outputs.release_tag }}
+          path: release-bundle
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Verify bundle signature with Cosign Keyless
+        env:
+          BUNDLE_NAME: ${{ needs.build-sign-attest.outputs.bundle_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          cosign verify-blob \
+            --bundle "release-bundle/${BUNDLE_NAME}.sigstore.json" \
+            --certificate-identity-regexp="^https://github\.com/${REPO}/\.github/workflows/release\.yml@refs/.*$" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "release-bundle/${BUNDLE_NAME}"
+
+          mkdir -p iac-workdir
+          tar -xzf "release-bundle/${BUNDLE_NAME}" -C iac-workdir
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
+          role-session-name: GitHubActions-OrbitIaC-Prod-${{ github.run_id }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init, Plan & Apply
+        working-directory: iac-workdir
+        run: |
+          terraform init
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan

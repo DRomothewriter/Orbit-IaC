@@ -1,0 +1,349 @@
+name: Security Main Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-source-branch:
+    name: Verify PR originates from dev
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Reject PRs not originating from dev
+        if: github.head_ref != 'dev'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "::error::Solo se permite abrir Pull Requests hacia 'main' desde la rama 'dev'. Rama actual: '${HEAD_REF}'."
+          exit 1
+
+      - name: Confirm valid PR source branch
+        if: github.head_ref == 'dev'
+        run: echo "Rama origen válida ('dev')."
+
+  terraform-and-workflow-tests:
+    name: Terraform & Workflow Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run Terraform tests
+        run: terraform init -backend=false && terraform test
+
+      - name: Run security workflow QA tests
+        run: node --test tests/security.workflows.test.js
+
+  sast-sonarcloud:
+    name: SAST - SonarCloud Quality Gate
+    needs: terraform-and-workflow-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan & Quality Gate
+        uses: SonarSource/sonarqube-scan-action@v8
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION || 'dromothewriter' }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY || 'DRomothewriter_Orbit-IaC' }}
+            -Dsonar.qualitygate.wait=true
+
+  sast-snyk-iac:
+    name: SAST - Snyk IaC
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine Snyk IaC gate for Dependabot PRs
+        id: snyk-gate
+        env:
+          ACTOR: ${{ github.actor }}
+          HAS_TOKEN: ${{ secrets.SNYK_TOKEN != '' }}
+        run: |
+          if [ "$ACTOR" = "dependabot[bot]" ] && [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning::SNYK_TOKEN no está disponible para dependabot[bot]; se omite Snyk IaC."
+            echo "run_snyk=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_snyk=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.snyk-gate.outputs.run_snyk == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Snyk CLI
+        if: steps.snyk-gate.outputs.run_snyk == 'true'
+        run: npm install -g snyk
+
+      - name: Run Snyk IaC test (HIGH/CRITICAL gate)
+        id: snyk-iac
+        if: steps.snyk-gate.outputs.run_snyk == 'true'
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk iac test --severity-threshold=high --sarif-file-output=snyk-iac.sarif
+
+      - name: Upload Snyk IaC SARIF to GitHub Security
+        if: always() && steps.snyk-gate.outputs.run_snyk == 'true' && hashFiles('snyk-iac.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-iac.sarif
+          category: snyk-iac
+
+      - name: Upload Snyk IaC reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-snyk-iac-reports
+          path: snyk-iac.sarif
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Enforce Snyk IaC HIGH/CRITICAL fail-gate
+        if: steps.snyk-gate.outputs.run_snyk == 'true' && steps.snyk-iac.outcome == 'failure'
+        run: |
+          echo "::error::Snyk IaC detectó hallazgos HIGH o CRITICAL."
+          exit 1
+
+  iac-compliance-checkov-trivy:
+    name: Compliance & IaC - Checkov & Trivy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python for Checkov
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Checkov
+        run: pip install --no-cache-dir checkov
+
+      - name: Run Checkov over Terraform and Docker Compose
+        id: checkov
+        continue-on-error: true
+        run: |
+          mkdir -p checkov-out
+          set +e
+          checkov -d . \
+            --framework terraform yaml \
+            --soft-fail \
+            --output sarif \
+            --output junitxml \
+            --output-file-path checkov-out
+          CHECKOV_EXIT=$?
+          set -e
+
+          if [ -f checkov-out/results_sarif.sarif ]; then
+            cp checkov-out/results_sarif.sarif checkov.sarif
+          fi
+          if [ -f checkov-out/results_junitxml.xml ]; then
+            cp checkov-out/results_junitxml.xml checkov-report.xml
+          fi
+          exit "$CHECKOV_EXIT"
+
+      - name: Run Trivy Config scan (HIGH/CRITICAL gate)
+        id: trivy-config
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
+          exit-code: '1'
+          trivyignores: .trivyignore
+
+      - name: Upload Checkov SARIF to GitHub Security
+        if: always() && hashFiles('checkov.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+      - name: Upload Trivy Config SARIF to GitHub Security
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      - name: Upload Compliance & IaC reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iac-compliance-reports
+          path: |
+            checkov-report.xml
+            checkov.sarif
+            trivy-config.sarif
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Enforce Checkov & Trivy fail-gate
+        if: steps.checkov.outcome == 'failure' || steps.trivy-config.outcome == 'failure'
+        run: |
+          echo "::error::Checkov o Trivy Config detectaron incumplimientos o hallazgos HIGH/CRITICAL."
+          exit 1
+
+  sbom-syft-grype:
+    name: SBOM & Supply Chain - Syft & Grype
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify Terraform lockfile is present for SBOM
+        run: test -f .terraform.lock.hcl
+
+      - name: Generate CycloneDX SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-cyclonedx.json
+
+      - name: Generate SPDX SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom-spdx.json
+
+      - name: Scan repository and .terraform.lock.hcl with Grype (HIGH/CRITICAL gate)
+        id: grype-sarif
+        uses: anchore/scan-action@v6
+        with:
+          path: .
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+          output-format: sarif
+
+      - name: Collect Grype SARIF output
+        if: always()
+        env:
+          GRYPE_SARIF: ${{ steps.grype-sarif.outputs.sarif }}
+        run: |
+          if [ -n "$GRYPE_SARIF" ] && [ -f "$GRYPE_SARIF" ]; then
+            cp "$GRYPE_SARIF" grype-results.sarif
+          fi
+
+      - name: Upload Grype SARIF to GitHub Security
+        if: always() && hashFiles('grype-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: grype-results.sarif
+          category: grype
+
+      - name: Upload SBOM & Grype reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-and-grype-reports
+          path: |
+            sbom-cyclonedx.json
+            sbom-spdx.json
+            grype-results.sarif
+          retention-days: 30
+          if-no-files-found: warn
+
+  terraform-plan-preview:
+    name: Terraform Plan Preview (Read-Only)
+    needs:
+      - terraform-and-workflow-tests
+      - iac-compliance-checkov-trivy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if AWS_ROLE_ARN is configured
+        id: aws-check
+        env:
+          HAS_AWS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
+        run: |
+          if [ "$HAS_AWS_ROLE" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AWS_ROLE_ARN no está configurado; se omite el preview de terraform plan."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials via OIDC
+        if: steps.aws-check.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
+          role-session-name: GitHubActions-OrbitIaC-Preview-${{ github.run_id }}
+
+      - name: Setup Terraform
+        if: steps.aws-check.outputs.configured == 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Run Terraform Init & Plan (Read-Only)
+        if: steps.aws-check.outputs.configured == 'true'
+        run: |
+          terraform init
+          terraform plan -no-color > terraform-plan-preview.txt
+
+      - name: Upload Terraform Plan Preview artifact
+        if: always() && steps.aws-check.outputs.configured == 'true' && hashFiles('terraform-plan-preview.txt') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-preview
+          path: terraform-plan-preview.txt
+          retention-days: 30

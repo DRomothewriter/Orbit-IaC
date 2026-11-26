@@ -1,0 +1,49 @@
+language: "es-ES"
+early_access: false
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - dev
+      - main
+  path_instructions:
+    - path: "**/*.tf"
+      instructions: |
+        Revisar rigurosamente seguridad y mejores prácticas de Terraform en AWS:
+        - Principio de menor privilegio en IAM (evitar wildcards "*" en Action o Resource siempre que sea evitable).
+        - AWS Security Groups restrictivos (prohibir 0.0.0.0/0 en puertos sensibles como SSH 22, bases de datos o puertos administrativos).
+        - Cifrado en reposo (EBS, S3, SSM/Secrets) y en tránsito (TLS/HTTPS) habilitado por defecto.
+        - Sin secretos, credenciales, tokens ni valores sensibles hardcodeados (usar variables, SSM Parameter Store o Secrets Manager).
+    - path: "docker/**"
+      instructions: |
+        Validar endurecimiento de Docker Compose y Nginx:
+        - Montajes de volúmenes en modo solo lectura (:ro) donde corresponda.
+        - Ejecución con usuario sin privilegios (non-root) cuando sea posible y capacidades mínimas (cap_drop: ALL).
+        - Configuración segura de TLS y cabeceras HTTP de seguridad en Nginx (HSTS, X-Content-Type-Options, X-Frame-Options, server_tokens off).
+        - Sin exposición innecesaria de puertos internos hacia 0.0.0.0.
+    - path: "docker/docker-compose.prod.yml"
+      instructions: |
+        Verificar endurecimiento específico de producción en Docker Compose:
+        - Montajes de solo lectura (:ro), límites de recursos y políticas de reinicio seguras.
+        - Sin puertos internos expuestos públicamente y sin credenciales en texto plano.
+    - path: "docker/nginx/**"
+      instructions: |
+        Verificar endurecimiento de Nginx:
+        - Uso estricto de TLSv1.2/TLSv1.3, cifrados fuertes y cabeceras de seguridad.
+        - Sin exposición de versiones (server_tokens off) ni rutas internas sensibles.
+    - path: ".github/workflows/**"
+      instructions: |
+        Validar seguridad de GitHub Actions:
+        - Principio de menor privilegio en permissions por job (nunca write-all).
+        - Prevenir script injection evitando interpolación directa de ${{ github.* }} o ${{ inputs.* }} dentro de run: (usar variables env:).
+        - Confirmar fail-gates estrictos en severidades HIGH/CRITICAL y preservación de artefactos/SARIF.
+chat:
+  auto_reply: true

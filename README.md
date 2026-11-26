@@ -161,3 +161,42 @@ Cuando Terraform pregunte si deseas copiar el estado existente al nuevo backend 
 Para consultar la evolución arquitectónica proyectada hacia multi-región, desacoplamiento del SFU con Mediasoup PipeTransports, Redis ElastiCache y balanceadores NLB/ALB para más de 10,000 usuarios concurrentes, revisa el documento dedicado:
 👉 [**Estrategia de Escalado de Infraestructura (`SCALING_STRATEGY.md`)**](SCALING_STRATEGY.md).
 
+---
+
+## 8. Arquitectura DevSecOps y Pipelines CI/CD
+
+El repositorio implementa una arquitectura de seguridad **DevSecOps** con fail-gates estrictos en severidades `HIGH` y `CRITICAL`, siguiendo el flujo de ramas:
+
+```text
+feature/* | bug/* | fix/* | docs/* | chore/* | refactor/* | test/*  -->  dev  -->  main  -->  release (vX.Y.Z)
+```
+
+> **Regla crítica de seguridad:** Nunca se ejecuta `terraform apply` automáticamente en `push` o merge a `main`. La aplicación a producción ocurre exclusivamente en `release.yml` bajo el entorno protegido `production` con aprobación humana manual.
+
+### Pipelines Implementados (`.github/workflows/`)
+
+| Workflow | Trigger | Controles y Gates | Artefactos / Retención |
+| :--- | :--- | :--- | :--- |
+| `ci-dev.yml` | `PR -> dev` | Validación de rama origen (bloquea `main -> dev`), guardia anti-`*.tfstate`/`terraform.tfvars` rastreados en Git, `terraform fmt -check -recursive`, `terraform init -backend=false`, `terraform validate`, TruffleHog (`--only-verified`), TFLint (`tflint-ruleset-aws`), Trivy Config (`HIGH,CRITICAL`) y SARIF a GitHub Security | `dev-secrets-reports`, `dev-iac-security-reports` (14 días) |
+| `security-main.yml` | `PR dev -> main`, `push: main`, `workflow_dispatch` | Verifica origen `dev`, `terraform test` (`tests/infrastructure.tftest.hcl`), suite TDD `node --test tests/security.workflows.test.js`, SonarCloud Quality Gate, Snyk IaC (`HIGH/CRITICAL`), Checkov (SARIF + `checkov-report.xml` JUnit), Trivy Config (SARIF), Syft SBOM (CycloneDX + SPDX), Grype (`severity-cutoff: high`, `only-fixed: true`), `terraform plan` de solo lectura vía AWS OIDC (si `AWS_ROLE_ARN` está configurado) | `sast-snyk-iac-reports`, `iac-compliance-reports`, `sbom-and-grype-reports`, plan preview (30 días) |
+| `release.yml` | `release: [published]`, `workflow_dispatch` | Valida ancestro `origin/main` y tag SemVer `vX.Y.Z`, empaqueta `orbit-iac-<tag>.tar.gz`, genera SBOM Syft, gate final Trivy/Checkov, firma Cosign Keyless (`sign-blob`/`verify-blob`), GitHub Artifact Attestations (`attest-build-provenance`, `attest-sbom`), `SHA256SUMS.txt`, adjunta assets al Release y ejecuta `terraform apply` solo tras aprobación manual en `environment: production` | Bundle firmado + attestations (90 días) |
+| `drift.yml` | `schedule` semanal (lunes 09:00 UTC), `workflow_dispatch` | Autenticación AWS OIDC de solo lectura y `terraform plan -detailed-exitcode -no-color`; si detecta cambios manuales fuera de Terraform (`exit 2`), guarda el diff y falla para alertar | `terraform-drift-report` (30 días) |
+
+### Gobernanza, Linting y Pruebas de Workflows
+
+- **Linters y Calidad:** `.tflint.hcl` (`tflint-ruleset-aws`), `.coderabbit.yaml` (`es-ES`), `sonar-project.properties`.
+- **Control de Cambios y Dependencias:** `.github/CODEOWNERS` (`@DRomothewriter`) y `.github/dependabot.yml` (actualizaciones semanales para `terraform` y `github-actions` hacia `dev`).
+- **Rulesets y Políticas GitHub:** Definidos en `.github/rulesets/{main,dev,tags}-ruleset.json` y aplicados mediante:
+  ```bash
+  ./scripts/apply-github-policies.sh DRomothewriter/Orbit-IaC
+  ```
+- **Validación TDD local de workflows:**
+  ```bash
+  node --test tests/security.workflows.test.js
+  ```
+
+### Secrets y Variables Recomendadas en GitHub
+- **Secrets:** `SONAR_TOKEN`, `SNYK_TOKEN`, `AWS_ROLE_ARN`.
+- **Variables:** `AWS_REGION` (default `us-east-2`), `SONAR_ORGANIZATION` (default `dromothewriter`), `SONAR_PROJECT_KEY` (default `DRomothewriter_Orbit-IaC`).
+
+

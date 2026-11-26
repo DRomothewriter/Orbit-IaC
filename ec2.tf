@@ -38,6 +38,13 @@ resource "aws_instance" "backend" {
   user_data                   = file("${path.module}/user_data.sh")
   user_data_replace_on_change = true
 
+  # Endurecimiento IMDSv2 obligatorio (mitiga SSRF hacia metadata de instancia)
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
+
   # Configuración del disco raíz con cifrado EBS y volumen de alto rendimiento gp3
   root_block_device {
     volume_size           = var.root_volume_size
