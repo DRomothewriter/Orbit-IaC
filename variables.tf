@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Entorno de ejecución de la infraestructura (dev, staging, prod)"
   type        = string
-  default     = "dev"
+  default     = "production"
 }
 
 variable "project_name" {
@@ -19,7 +19,7 @@ variable "project_name" {
 variable "domain_name" {
   description = "Dominio raíz del proyecto Orbit para DNS y certificados SSL/TLS"
   type        = string
-  default     = "orbitapp.dev"
+  default     = "diego-romo-dev.com"
 }
 
 variable "tags" {
